@@ -20,3 +20,8 @@ def index():
                            title='Home',
                            user=user,
                            posts=posts)
+
+
+@app.route('/oauth')
+def oauth():
+
