@@ -5,12 +5,13 @@ import hmac
 import time
 import os
 from slacker import Slacker
+import logging
 
 
 CLIENT_ID = "20006151314.70868885203"
 CLIENT_SECRET = "07a40f40126b4ce167c36c39e80411f1"
 SIG_FILE_PATH = "./tmp/sig"
-REDIRECT_URI = "http://nonbeing.tech/oauth"
+REDIRECT_URI = "https://nonbeing.tech/oauth"
 
 with open(os.path.join(os.path.dirname(__file__), 'SLACK_BOT_API_TOKEN')) as f:
     BOT_API_TOKEN = f.read().strip()
@@ -18,6 +19,20 @@ slack = Slacker(BOT_API_TOKEN)
 
 with open(os.path.join(os.path.dirname(__file__), 'HMAC_SECRET_KEY')) as f:
     _HMAC_KEY = f.read().strip()
+
+
+# create logger with 'spam_application'
+logger = logging.getLogger('flask_webapp')
+
+# create file handler which logs even debug messages
+fh = logging.FileHandler("/tmp/flaskwebapp.log")
+fh.setLevel(logging.DEBUG)
+
+formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+fh.setFormatter(formatter)
+logger.addHandler(fh)
+
+
 
 def _hmac_sha256(message, key=_HMAC_KEY):
     # Generate the hash.
@@ -27,6 +42,7 @@ def _hmac_sha256(message, key=_HMAC_KEY):
         hashlib.sha256
     ).hexdigest()
 
+    logger.info("signature for '{}' is: '{}'".format(message, signature))
     return signature
 
 
@@ -55,8 +71,10 @@ def oauth():
     code = request.args.get('code')
     if code:
         response = slack.oauth.access(client_id=CLIENT_ID, client_secret=CLIENT_SECRET, code=code)
+        logger.info("Slack Oauth response for code='{}' =\n{}".format(code, response))
     else:
-        return "ERROR: no code!"
+        logger.error("Incoming request to /oauth was missing the expected 'code' param ")
+        return "ERROR: no code?!"
     return response
 
 
