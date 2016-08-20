@@ -9,6 +9,10 @@ tmp/
 # pyc files
 *.pyc 
 
+
+# SECRET files
+*SECRET*
+
 # salt retry files
 salt-install.retry
 
