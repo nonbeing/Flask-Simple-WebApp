@@ -49,10 +49,25 @@ def index():
         redirect_uri=REDIRECT_URI)
 
 
+
 @app.route('/oauth')
 def oauth():
     code = request.args.get('code')
-    response = slack.oauth.access(client_id=CLIENT_ID, client_secret=CLIENT_SECRET, code=code)
-    pass
+    if code:
+        response = slack.oauth.access(client_id=CLIENT_ID, client_secret=CLIENT_SECRET, code=code)
+    else:
+        return "ERROR: no code!"
+    return response
+
+
+# ZeroSSL challenges:
+# @app.route('/.well-known/acme-challenge/mdaDswXLn73yN8Zv8Kfoxoa8R7k2Lg7fgAhobwne1Ig')
+# def challenge1():
+#     return "mdaDswXLn73yN8Zv8Kfoxoa8R7k2Lg7fgAhobwne1Ig.LwhNiXeAtyFQtGtYKfpys8KYzU4VM2XBtVVVk37d6Kw"
+
+
+# @app.route('/.well-known/acme-challenge/NP1ijvAqlJArbOwWazhfnSs9PPcioYcn7dq_Jzsk9K4')
+# def challenge2():
+#     return "NP1ijvAqlJArbOwWazhfnSs9PPcioYcn7dq_Jzsk9K4.LwhNiXeAtyFQtGtYKfpys8KYzU4VM2XBtVVVk37d6Kw"
 
 
