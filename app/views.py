@@ -10,6 +10,7 @@ import logging
 
 CLIENT_ID = "20006151314.70868885203"
 CLIENT_SECRET = "07a40f40126b4ce167c36c39e80411f1"
+
 SIG_FILE_PATH = "./tmp/sig"
 REDIRECT_URI = "https://nonbeing.tech/oauth"
 
@@ -23,7 +24,7 @@ with open(os.path.join(os.path.dirname(__file__), 'HMAC_SECRET_KEY')) as f:
 
 # create logger with 'spam_application'
 logger = logging.getLogger('flask_webapp')
-
+logger.setLevel(logging.DEBUG)
 # create file handler which logs even debug messages
 fh = logging.FileHandler("/tmp/flaskwebapp.log")
 fh.setLevel(logging.DEBUG)
@@ -53,6 +54,9 @@ def index():
     now_ts = time.time()
     signature = _hmac_sha256(now_ts)
 
+    logger.info("now_ts: '{}'\nsignature: '{}'".format(now_ts, signature))
+
+
     # save the signature for later
     # TODO: needs to go into a db, even sqlite will do
     with open(SIG_FILE_PATH, 'a') as f:
@@ -67,14 +71,19 @@ def index():
 
 
 @app.route('/oauth')
-def oauth():
+def slack_oauth():
     code = request.args.get('code')
-    if code:
-        response = slack.oauth.access(client_id=CLIENT_ID, client_secret=CLIENT_SECRET, code=code)
-        logger.info("Slack Oauth response for code='{}' =\n{}".format(code, response))
-    else:
-        logger.error("Incoming request to /oauth was missing the expected 'code' param ")
-        return "ERROR: no code?!"
+    logger.info("oauth - code: '{}'".format(code))
+
+    try:
+        if code:
+            response = slack.oauth.access(client_id=CLIENT_ID, client_secret=CLIENT_SECRET, code=code)
+            logger.info("Slack Oauth response for code='{}' =\n{}".format(code, response))
+        else:
+            logger.error("Incoming request to /oauth was missing the expected 'code' param ")
+            return "ERROR: no code?!"
+    except Exception as e:
+        logger.error("General Exception: `{}`".format(str(e)))
     return response
 
 
