@@ -5,11 +5,11 @@ from app import app
 @app.route('/')
 @app.route('/index')
 def index():
-    user = {'nickname': 'Miguel'}
+    user = {'nickname': 'Ambar'}
     posts = [
         {
             'author': {'nickname': 'John'},
-            'body': 'Beautiful day in Portland!'
+            'body': 'Beautiful day in Pune!'
         },
         {
             'author': {'nickname': 'Susan'},
