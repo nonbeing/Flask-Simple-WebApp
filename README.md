@@ -1,17 +1,15 @@
-microblog
-=========
+# Simple WebApp
 
-A decently featured microblogging web application written in Python and Flask that I'm developing in my Flask Mega-Tutorial series that begins [here](http://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-i-hello-world).
+Taken with gratitude from [Miguel Grinberg's Awesome Flask Mega Tutorial](http://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-i-hello-world), with [this Github repo](https://github.com/miguelgrinberg/microblog).
 
-Installation
-------------
+## Repurposed Bootstrap-based SPA
 
-The tutorial referenced above explains how to setup a virtual environment with all the required modules.
+Originally was: "A decently featured microblogging web application written in Python and Flask that I'm developing in my Flask Mega-Tutorial series," but I've repurposed it to hold a very minimal Bootstrap-themed SPA.
 
-The sqlite database must also be created before the application can run, and the `db_create.py` script takes care of that. See the [Database tutorial](http://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-iv-database) for the details.
+## Installation
 
-Running
--------
+Miguel's tutorial referenced above explains how to setup a virtual environment with all the required modules.
 
+## Running
 To run the application in the development web server just execute `run.py` with the Python interpreter from the flask virtual environment.
 
