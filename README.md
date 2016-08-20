@@ -1,4 +1,4 @@
-# Simple WebApp
+# Simple WebApp using Flask
 
 Taken with gratitude from [Miguel Grinberg's Awesome Flask Mega Tutorial](http://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-i-hello-world), with [this Github repo](https://github.com/miguelgrinberg/microblog).
 
