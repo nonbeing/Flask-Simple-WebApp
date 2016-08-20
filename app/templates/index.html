@@ -1,9 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
-    <h1>Hi, {{ user.nickname }}!</h1>
-    {% for post in posts %}
-    <p>
-      {{ post.author.nickname }} says: <b>{{ post.body }}</b>
-    </p>
-    {% endfor %}
+    <h2>Welcome to OpsBot Central!</h2>
+    <hr></hr>
+    <h3>What is OpsBot?</h3>
+    <p>CloudCover OpsBot is a swiss-army knife of Ops tools.</p>
+    <p>It is especially focused on providing on-call calendar management using the <a href="https://developers.google.com/google-apps/calendar/">Google Calendar API</a></p>
+    <h3>How can I get OpsBot?</h3>
+    <p>To add CloudCover OpsBot to your Slack team, just install the OpsBot Slack app</p>
+    <p></p>
+    <a href="https://slack.com/oauth/authorize?scope=commands,bot&client_id=20006151314.70868885203"><img alt="Add to Slack" height="40" width="139" src="https://platform.slack-edge.com/img/add_to_slack.png" srcset="https://platform.slack-edge.com/img/add_to_slack.png 1x, https://platform.slack-edge.com/img/add_to_slack@2x.png 2x" /></a>
 {% endblock %}
