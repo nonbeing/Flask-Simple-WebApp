@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+    <h2>{{error_type}} Error</h2>
+    <hr></hr>
+    <h3>Something went wrong</h3>
+    <p>{{description}}</p>
+    <p>&nbsp;</p>
+    <p align="center">
+        <pre>{{details}}</pre>
+    </p>
+{% endblock %}
