@@ -1,4 +1,4 @@
-from flask import render_template, request
+from flask import render_template, request, redirect
 from app import app
 import hashlib
 import hmac
@@ -137,4 +137,10 @@ def slack_oauth_add_to_slack():
 
     # all went well, take user to success endpoint
     return render_template("success.html", description="Thank you for adding OpsBot to your Slack team!")
+
+
+# Help/Support page: just redirect to index for now
+@app.route('/opsbot/help')
+def opsbot_help():
+    return redirect("http://nonbeing.tech", code=302)
 
