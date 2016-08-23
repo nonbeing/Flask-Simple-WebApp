@@ -35,6 +35,7 @@ APP_HMAC_KEY = config.get('webapp', 'APP_HMAC_KEY')
 APP_SIGN_IN_WITH_SLACK_REDIRECT_URI = config.get('webapp', 'APP_SIGN_IN_WITH_SLACK_REDIRECT_URI')
 APP_ADD_TO_SLACK_REDIRECT_URI = config.get('webapp', 'APP_ADD_TO_SLACK_REDIRECT_URI')
 APP_SIG_FILE_PATH = config.get('webapp', 'APP_SIG_FILE_PATH')
+AWS_REGION = config.get('aws', 'AWS_REGION')
 
 slack = Slacker(SLACK_BOT_API_TOKEN)
 
