@@ -19,12 +19,11 @@ formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
 fh.setFormatter(formatter)
 logger.addHandler(fh)
 
-
+# Parse config/SECRETS.ini file - which must be created by hand
 config = ConfigParser.ConfigParser()
 config_file = os.path.join(os.path.dirname(__file__), 'config/SECRETS.ini')
 logger.info("config_file full path:'{}'".format(config_file))
 config.read(config_file)
-
 logger.info("config sections: {}".format(config.sections()))
 
 # Read global consts from config
@@ -85,7 +84,7 @@ def index():
     # arbitrary, useless hash
 
     return render_template("index.html",
-        client_id=CLIENT_ID,
+        client_id=SLACK_CLIENT_ID,
         title='Home',
         signature=signature,
         redirect_uri=APP_REDIRECT_URI)
