@@ -10,9 +10,22 @@ import logging
 import boto3
 import ConfigParser
 
-config = ConfigParser.ConfigParser()
-config.read('config/SECRETS.ini')
+# create file logger
+logger = logging.getLogger('flask_webapp')
+logger.setLevel(logging.DEBUG)
+fh = logging.FileHandler("/tmp/flaskwebapp.log")
+fh.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+fh.setFormatter(formatter)
+logger.addHandler(fh)
 
+
+config = ConfigParser.ConfigParser()
+config_file = os.path.join(os.path.dirname(__file__), 'config/SECRETS.ini')
+logger.info("config_file full path:'{}'".format(config_file))
+config.read(config_file)
+
+logger.info("config sections: {}".format(config.sections()))
 
 # Read global consts from config
 SLACK_CLIENT_ID = config.get('slack', 'SLACK_CLIENT_ID')
@@ -23,17 +36,7 @@ APP_HMAC_KEY = config.get('webapp', 'APP_HMAC_KEY')
 APP_REDIRECT_URI = config.get('webapp', 'APP_REDIRECT_URI')
 APP_SIG_FILE_PATH = config.get('webapp', 'APP_SIG_FILE_PATH')
 
-
 slack = Slacker(SLACK_BOT_API_TOKEN)
-
-# create file logger
-logger = logging.getLogger('flask_webapp')
-logger.setLevel(logging.DEBUG)
-fh = logging.FileHandler("/tmp/flaskwebapp.log")
-fh.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
-fh.setFormatter(formatter)
-logger.addHandler(fh)
 
 
 
