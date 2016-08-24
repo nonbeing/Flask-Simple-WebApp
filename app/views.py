@@ -68,20 +68,23 @@ def _add_dynamodb_item(item, dynamodb_table_name):
 
 
 
-def _do_oauth(signature=None):
+def _do_oauth(signature=None, team=None):
     flask_url = request.url_rule
 
     # grab the 'code' and 'state' from the incoming Slack request
     code = request.args.get('code')
     state = request.args.get('state')
+    redirect_uri = request.args.get('redirect_uri')
     retval = slack_response = {}
     # TODO: Verify that state is the same as was sent to us initially
     # STATE VERIFICATION STEPS
-    logger.info("oauth - code: '{}', oauth - state: '{}'".format(code, state))
+    logger.info("do_oauth(): code: '{}', state: '{}', redirect_uri: '{}'".format(code, state, redirect_uri))
 
     try:
         if code: #'code' implies 'happy path scenario': the user approved the slack scopes asked of him
-            slack_response = slack.oauth.access(client_id=SLACK_CLIENT_ID, client_secret=SLACK_CLIENT_SECRET, code=code)
+            logger.info("Got 'code' from Slack, doing slack.oauth.access()")
+
+            slack_response = slack.oauth.access(client_id=SLACK_CLIENT_ID, client_secret=SLACK_CLIENT_SECRET, code=code, redirect_uri=redirect_uri)
             logger.info("Slack Oauth response for code='{}': body: {}, error: {}, successful: {}".format(code, slack_response.body, slack_response.error, slack_response.successful))
             oauth_json = slack_response.body
 
@@ -157,7 +160,10 @@ def slack_oauth_add_to_slack():
         return retval['error_html']
 
     # all went well, take user to success endpoint
-    return render_template("success.html", description="Thank you for adding OpsBot to your Slack team!")
+
+    # TODO: add "team=xyz" to the template... get the team_id from DynamoDB
+    # can do auth.test to get user_name, look at http://stackoverflow.com/a/32323973/376240
+    return render_template("success.html", description="Thank you, {}, for adding OpsBot to your Slack team ({})!".format(user_name, team_name))
 
 
 # Help/Support page: just redirect to index for now
