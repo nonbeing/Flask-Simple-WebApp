@@ -85,7 +85,11 @@ def _do_oauth(signature=None, team=None):
         if code: #'code' implies 'happy path scenario': the user approved the slack scopes asked of him
             logger.info("Got 'code' from Slack, doing slack.oauth.access()")
 
-            slack_response = slack.oauth.access(client_id=SLACK_CLIENT_ID, client_secret=SLACK_CLIENT_SECRET, code=code, redirect_uri=redirect_uri)
+            if redirect_uri:
+                slack_response = slack.oauth.access(client_id=SLACK_CLIENT_ID, client_secret=SLACK_CLIENT_SECRET, code=code, redirect_uri=redirect_uri)
+            else: # don't pass redirect_uri if it's None (as in the end of the oauth flow)
+                slack_response = slack.oauth.access(client_id=SLACK_CLIENT_ID, client_secret=SLACK_CLIENT_SECRET, code=code)
+
             logger.info("Slack Oauth response for code='{}': body: {}, error: {}, successful: {}".format(code, slack_response.body, slack_response.error, slack_response.successful))
             oauth_json = slack_response.body
 
