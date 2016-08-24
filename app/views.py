@@ -80,8 +80,8 @@ def _do_oauth(signature=None):
     try:
         if code: #'code' implies 'happy path scenario': the user approved the slack scopes asked of him
             slack_response = slack.oauth.access(client_id=SLACK_CLIENT_ID, client_secret=SLACK_CLIENT_SECRET, code=code)
-            logger.info("Slack Oauth response for code='{}' = {}".format(code, slack_response))
-            oauth_json = json.loads(slack_response)
+            logger.info("Slack Oauth response for code='{}': body: {}, error: {}, successful: {}".format(code, slack_response.body, slack_response.error, slack_response.successful))
+            oauth_json = slack_response.body
 
             if oauth_json['ok']:
                 dynamo_item = { 'team_id': oauth_json['team_id'], 'team_name': oauth_json['team_name'], 'access_token': oauth_json['access_token'], 'scope': oauth_json['scope'], 'user_id': oauth_json['user_id'], 'bot_user_id': oauth_json['bot']['bot_user_id'], 'bot_access_token': oauth_json['bot']['bot_access_token'], 'ok': oauth_json['ok'], 'signature': signature }
