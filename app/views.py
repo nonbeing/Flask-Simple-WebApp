@@ -74,7 +74,7 @@ def _do_oauth(signature=None):
     # grab the 'code' and 'state' from the incoming Slack request
     code = request.args.get('code')
     state = request.args.get('state')
-    slack_response = {}
+    retval = slack_response = {}
     # TODO: Verify that state is the same as was sent to us initially
     # STATE VERIFICATION STEPS
     logger.info("oauth - code: '{}', oauth - state: '{}'".format(code, state))
@@ -89,20 +89,24 @@ def _do_oauth(signature=None):
                 if 'oauthSignInWithSlack' in flask_url.rule:
                     dynamo_item = { 'team_id': oauth_json['team']['id'], 'installing_user_id': oauth_json['user']['id'], 'user_name': oauth_json['user']['name'], 'scope': oauth_json['scope'], 'access_token': oauth_json['access_token'], 'ok': oauth_json['ok'] }
 
+                    retval['user_name'] = oauth_json['user']['name']
+
                 elif 'oauthAddToSlack' in flask_url.rule:
+                    # TODO: get_item() first, then simply add new attributes to existing item
                     dynamo_item = { 'team_id': oauth_json['team_id'], 'team_name': oauth_json['team_name'], 'access_token': oauth_json['access_token'], 'scope': oauth_json['scope'], 'user_id': oauth_json['user_id'], 'bot_user_id': oauth_json['bot']['bot_user_id'], 'bot_access_token': oauth_json['bot']['bot_access_token'], 'ok': oauth_json['ok'], 'signature': signature }
 
                 logger.info("_do_oauth(): dynamo_item: '{}'".format(dynamo_item))
                 _add_dynamodb_item(dynamo_item, APP_DYNAMODB_TABLE)
             else:
-                return render_template("error.html", error_type="Oauth", description="We're sorry, but your Slack Authorization Flow somehow failed", details="{}".format(slack_response))
+                retval['error_html'] =  render_template("error.html", error_type="Oauth", description="We're sorry, but your Slack Authorization Flow somehow failed", details="{}".format(slack_response))
         else:
             logger.error("Incoming request to /oauth was missing the expected 'code' param ")
-            return render_template("error.html", error_type="Oauth", description="We're sorry, but your Slack Authorization Flow failed because of a missing 'code' param from Slack.", details="{}".format(slack_response))
+            retval['error_html'] = render_template("error.html", error_type="Oauth", description="We're sorry, but your Slack Authorization Flow failed", details="missing 'code' param from Slack".format(slack_response))
     except Exception as e:
         logger.error("General Exception: '{}'".format(str(e)))
-        return "General Exception: '{}'".format(str(e))
+        retval['error_html']= render_template("error.html", error_type="Bad Code", description="Sorry, something went wrong. Please report bug to `admin AT nonbeing.tech`", details="General Exception: '{}'".format(str(e)))
 
+    return retval
 
 
 @app.route('/')
@@ -130,10 +134,14 @@ def slack_oauth_sign_in_with_slack():
 
     retval = _do_oauth(signature)
 
-    if retval: return retval
+    if 'error_html' in retval.keys():
+        return retval['error_html']
+    elif 'user_name' in retval.keys():
+        user_name = retval['user_name']
 
     # all went well, take user to AddToSlack flow
     return render_template("addToSlack.html",
+        user_name=user_name,
         client_id=SLACK_CLIENT_ID,
         title='Install OpsBot',
         signature=signature,
@@ -145,7 +153,8 @@ def slack_oauth_sign_in_with_slack():
 def slack_oauth_add_to_slack():
     retval = _do_oauth()
 
-    if retval: return retval
+    if 'error_html' in retval.keys():
+        return retval['error_html']
 
     # all went well, take user to success endpoint
     return render_template("success.html", description="Thank you for adding OpsBot to your Slack team!")
