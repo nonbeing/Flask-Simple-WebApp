@@ -34,6 +34,7 @@ APP_DYNAMODB_TABLE = config.get('webapp', 'APP_DYNAMODB_TABLE')
 APP_HMAC_KEY = config.get('webapp', 'APP_HMAC_KEY')
 APP_SIGN_IN_WITH_SLACK_REDIRECT_URI = config.get('webapp', 'APP_SIGN_IN_WITH_SLACK_REDIRECT_URI')
 APP_ADD_TO_SLACK_REDIRECT_URI = config.get('webapp', 'APP_ADD_TO_SLACK_REDIRECT_URI')
+APP_OAUTH_END_URI = config.get('webapp', 'APP_OAUTH_END_URI')
 APP_SIG_FILE_PATH = config.get('webapp', 'APP_SIG_FILE_PATH')
 AWS_REGION = config.get('aws', 'AWS_REGION')
 
@@ -94,7 +95,7 @@ def _do_oauth(signature=None, team=None):
 
                     retval['user_name'] = oauth_json['user']['name']
 
-                elif 'oauthAddToSlack' in flask_url.rule:
+                elif 'oauthAddToSlack' in flask_url.rule or 'oauthEnd' in flask_url.rule:
                     # TODO: get_item() first, then simply add new attributes to existing item
                     dynamo_item = { 'team_id': oauth_json['team_id'], 'team_name': oauth_json['team_name'], 'access_token': oauth_json['access_token'], 'scope': oauth_json['scope'], 'user_id': oauth_json['user_id'], 'bot_user_id': oauth_json['bot']['bot_user_id'], 'bot_access_token': oauth_json['bot']['bot_access_token'], 'ok': oauth_json['ok'], 'signature': signature }
 
@@ -123,6 +124,8 @@ def index():
 
 
 
+
+
 @app.route('/oauthSignInWithSlack')
 def slack_oauth_sign_in_with_slack():
     now_ts = time.time()
@@ -135,12 +138,14 @@ def slack_oauth_sign_in_with_slack():
     with open(APP_SIG_FILE_PATH, 'a') as f:
         f.write("{}\n".format(signature))
 
+    logger.info("slack_oauth_sign_in_with_slack() - going to do oauth")
     retval = _do_oauth(signature)
 
     if 'error_html' in retval.keys():
         return retval['error_html']
     elif 'user_name' in retval.keys():
         user_name = retval['user_name']
+        logger.info("slack_oauth_sign_in_with_slack(): got username: '{}'".format(user_name))
 
     # all went well, take user to AddToSlack flow
     return render_template("addToSlack.html",
@@ -148,22 +153,34 @@ def slack_oauth_sign_in_with_slack():
         client_id=SLACK_CLIENT_ID,
         title='Install OpsBot',
         signature=signature,
-        redirect_uri=APP_ADD_TO_SLACK_REDIRECT_URI)
+        redirect_uri=APP_OAUTH_END_URI)
 
 
 
 @app.route('/oauthAddToSlack')
 def slack_oauth_add_to_slack():
+    logger.info("slack_oauth_add_to_slack() - going to do oauth")
     retval = _do_oauth()
 
     if 'error_html' in retval.keys():
         return retval['error_html']
 
+
+
+
+@app.route('/oauthEnd')
+def slack_oauth_end():
+    logger.info("slack_oauth_end() - going to do oauth")
+    retval = _do_oauth()
+
+    if 'error_html' in retval.keys():
+        return retval['error_html']
     # all went well, take user to success endpoint
 
     # TODO: add "team=xyz" to the template... get the team_id from DynamoDB
     # can do auth.test to get user_name, look at http://stackoverflow.com/a/32323973/376240
     return render_template("success.html", description="Thank you, {}, for adding OpsBot to your Slack team ({})!".format(user_name, team_name))
+
 
 
 # Help/Support page: just redirect to index for now
