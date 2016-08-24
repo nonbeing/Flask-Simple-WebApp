@@ -69,6 +69,8 @@ def _add_dynamodb_item(item, dynamodb_table_name):
 
 
 def _do_oauth(signature=None):
+    flask_url = request.url_rule
+
     # grab the 'code' and 'state' from the incoming Slack request
     code = request.args.get('code')
     state = request.args.get('state')
@@ -84,8 +86,13 @@ def _do_oauth(signature=None):
             oauth_json = slack_response.body
 
             if oauth_json['ok']:
-                dynamo_item = { 'team_id': oauth_json['team_id'], 'team_name': oauth_json['team_name'], 'access_token': oauth_json['access_token'], 'scope': oauth_json['scope'], 'user_id': oauth_json['user_id'], 'bot_user_id': oauth_json['bot']['bot_user_id'], 'bot_access_token': oauth_json['bot']['bot_access_token'], 'ok': oauth_json['ok'], 'signature': signature }
+                if 'oauthSignInWithSlack' in flask_url.rule:
+                    dynamo_item = { 'team_id': oauth_json['team']['id'], 'installing_user_id': oauth_json['user']['id'], 'user_name': oauth_json['user']['name'], 'scope': oauth_json['scope'], 'access_token': oauth_json['access_token'], 'ok': oauth_json['ok'] }
 
+                elif 'oauthAddToSlack' in flask_url.rule:
+                    dynamo_item = { 'team_id': oauth_json['team_id'], 'team_name': oauth_json['team_name'], 'access_token': oauth_json['access_token'], 'scope': oauth_json['scope'], 'user_id': oauth_json['user_id'], 'bot_user_id': oauth_json['bot']['bot_user_id'], 'bot_access_token': oauth_json['bot']['bot_access_token'], 'ok': oauth_json['ok'], 'signature': signature }
+
+                logger.info("_do_oauth(): dynamo_item: '{}'".format(dynamo_item))
                 _add_dynamodb_item(dynamo_item, APP_DYNAMODB_TABLE)
             else:
                 return render_template("error.html", error_type="Oauth", description="We're sorry, but your Slack Authorization Flow somehow failed", details="{}".format(slack_response))
