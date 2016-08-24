@@ -72,7 +72,7 @@ def _do_oauth(signature=None):
     # grab the 'code' and 'state' from the incoming Slack request
     code = request.args.get('code')
     state = request.args.get('state')
-
+    slack_response = {}
     # TODO: Verify that state is the same as was sent to us initially
     # STATE VERIFICATION STEPS
     logger.info("oauth - code: '{}', oauth - state: '{}'".format(code, state))
@@ -95,6 +95,7 @@ def _do_oauth(signature=None):
     except Exception as e:
         logger.error("General Exception: '{}'".format(str(e)))
         return "General Exception: '{}'".format(str(e))
+
 
 
 @app.route('/')
@@ -120,7 +121,9 @@ def slack_oauth_sign_in_with_slack():
     with open(APP_SIG_FILE_PATH, 'a') as f:
         f.write("{}\n".format(signature))
 
-    _do_oauth(signature)
+    retval = _do_oauth(signature)
+
+    if retval: return retval
 
     # all went well, take user to AddToSlack flow
     return render_template("addToSlack.html",
@@ -133,7 +136,9 @@ def slack_oauth_sign_in_with_slack():
 
 @app.route('/oauthAddToSlack')
 def slack_oauth_add_to_slack():
-    _do_oauth()
+    retval = _do_oauth()
+
+    if retval: return retval
 
     # all went well, take user to success endpoint
     return render_template("success.html", description="Thank you for adding OpsBot to your Slack team!")
