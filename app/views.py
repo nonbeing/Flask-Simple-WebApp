@@ -70,8 +70,6 @@ def _add_dynamodb_item(item, dynamodb_table_name):
 
 
 def _do_oauth(signature=None, team=None):
-    flask_url = request.url_rule
-
     # grab the 'code' and 'state' from the incoming Slack request
     code = request.args.get('code')
     state = request.args.get('state')
@@ -90,12 +88,12 @@ def _do_oauth(signature=None, team=None):
             oauth_json = slack_response.body
 
             if oauth_json['ok']:
-                if 'oauthSignInWithSlack' in flask_url.rule:
+                if 'user' in oauth_json.keys(): # SIGN IN WITH SLACK returns user name
                     dynamo_item = { 'team_id': oauth_json['team']['id'], 'installing_user_id': oauth_json['user']['id'], 'user_name': oauth_json['user']['name'], 'scope': oauth_json['scope'], 'access_token': oauth_json['access_token'], 'ok': oauth_json['ok'] }
 
                     retval['user_name'] = oauth_json['user']['name']
 
-                elif 'oauthAddToSlack' in flask_url.rule or 'oauthEnd' in flask_url.rule:
+                else:
                     # TODO: get_item() first, then simply add new attributes to existing item
                     dynamo_item = { 'team_id': oauth_json['team_id'], 'team_name': oauth_json['team_name'], 'access_token': oauth_json['access_token'], 'scope': oauth_json['scope'], 'user_id': oauth_json['user_id'], 'bot_user_id': oauth_json['bot']['bot_user_id'], 'bot_access_token': oauth_json['bot']['bot_access_token'], 'ok': oauth_json['ok'], 'signature': signature }
 
@@ -126,27 +124,34 @@ def index():
 
 
 
-@app.route('/oauthSignInWithSlack')
-def slack_oauth_sign_in_with_slack():
-    now_ts = time.time()
-    signature = _hmac_sha256(now_ts)
+@app.route('/oauth')
+def slack_oauth():
+    # now_ts = time.time()
+    # signature = _hmac_sha256(now_ts)
 
-    logger.info("now_ts: '{}'\nsignature: '{}'".format(now_ts, signature))
+    # logger.info("now_ts: '{}'\nsignature: '{}'".format(now_ts, signature))
 
-    # save the signature for later
-    # TODO: needs to go into a db, even sqlite will do
-    with open(APP_SIG_FILE_PATH, 'a') as f:
-        f.write("{}\n".format(signature))
+    # # save the signature for later
+    # # TODO: needs to go into a db, even sqlite will do
+    # with open(APP_SIG_FILE_PATH, 'a') as f:
+    #     f.write("{}\n".format(signature))
 
-    logger.info("slack_oauth_sign_in_with_slack() - going to do oauth")
+    logger.info("slack_oauth() - going to do oauth")
     retval = _do_oauth(signature)
 
     if 'error_html' in retval.keys():
         return retval['error_html']
     elif 'user_name' in retval.keys():
         user_name = retval['user_name']
-        logger.info("slack_oauth_sign_in_with_slack(): got username: '{}'".format(user_name))
+        logger.info("slack_oauth(): got username: '{}'".format(user_name))
 
+        return redirect("http://nonbeing.tech/addToSlack", code=302)
+
+
+
+
+@app.route('/addToSlack')
+def slack_oauth_add_to_slack():
     # all went well, take user to AddToSlack flow
     return render_template("addToSlack.html",
         user_name=user_name,
@@ -155,10 +160,6 @@ def slack_oauth_sign_in_with_slack():
         signature=signature,
         redirect_uri=APP_OAUTH_END_URI)
 
-
-
-@app.route('/oauthAddToSlack')
-def slack_oauth_add_to_slack():
     logger.info("slack_oauth_add_to_slack() - going to do oauth")
     retval = _do_oauth()
 
