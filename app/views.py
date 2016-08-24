@@ -69,13 +69,13 @@ def _add_dynamodb_item(item, dynamodb_table_name):
 
 
 
-def _do_oauth(signature=None, team=None):
+def _do_oauth(signature=None, team=None, redirect_uri=None):
     flask_url = request.url_rule
 
     # grab the 'code' and 'state' from the incoming Slack request
     code = request.args.get('code')
     state = request.args.get('state')
-    redirect_uri = request.args.get('redirect_uri')
+    error = request.args.get('error')
     retval = slack_response = {}
     # TODO: Verify that state is the same as was sent to us initially
     # STATE VERIFICATION STEPS
@@ -83,12 +83,8 @@ def _do_oauth(signature=None, team=None):
 
     try:
         if code: #'code' implies 'happy path scenario': the user approved the slack scopes asked of him
-            logger.info("Got 'code' from Slack, doing slack.oauth.access()")
-
-            if redirect_uri:
-                slack_response = slack.oauth.access(client_id=SLACK_CLIENT_ID, client_secret=SLACK_CLIENT_SECRET, code=code, redirect_uri=redirect_uri)
-            else: # don't pass redirect_uri if it's None (as in the end of the oauth flow)
-                slack_response = slack.oauth.access(client_id=SLACK_CLIENT_ID, client_secret=SLACK_CLIENT_SECRET, code=code)
+            logger.info("Got 'code' from Slack, doing slack.oauth.access() with client_id:{}, client_secret:{}, code:{}, redirect_uri:{}".format(SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, code, redirect_uri))
+            slack_response = slack.oauth.access(client_id=SLACK_CLIENT_ID, client_secret=SLACK_CLIENT_SECRET, code=code, redirect_uri=redirect_uri)
 
             logger.info("Slack Oauth response for code='{}': body: {}, error: {}, successful: {}".format(code, slack_response.body, slack_response.error, slack_response.successful))
             oauth_json = slack_response.body
@@ -106,10 +102,10 @@ def _do_oauth(signature=None, team=None):
                 logger.info("_do_oauth(): dynamo_item: '{}'".format(dynamo_item))
                 _add_dynamodb_item(dynamo_item, APP_DYNAMODB_TABLE)
             else:
-                retval['error_html'] =  render_template("error.html", error_type="Oauth", description="We're sorry, but your Slack Authorization Flow somehow failed", details="{}".format(slack_response))
+                retval['error_html'] =  render_template("error.html", error_type="Oauth", description="We're sorry, but your Slack Authorization Flow somehow failed", details="{}".format(slack_response.body))
         else:
-            logger.error("Incoming request to /oauth was missing the expected 'code' param ")
-            retval['error_html'] = render_template("error.html", error_type="Oauth", description="We're sorry, but your Slack Authorization Flow failed", details="missing 'code' param from Slack".format(slack_response))
+            logger.error("Incoming request to /oauth was missing the expected 'code' param, error-from-slack:'{}'".format(error))
+            retval['error_html'] = render_template("error.html", error_type="Oauth", description="We're sorry, but your Slack Authorization Flow failed", details="missing 'code' param from Slack, error-from-slack:{}".format(error))
     except Exception as e:
         logger.error("General Exception: '{}'".format(str(e)))
         retval['error_html']= render_template("error.html", error_type="Bad Code", description="Sorry, something went wrong. Please report bug to `admin AT nonbeing.tech`", details="General Exception: '{}'".format(str(e)))
@@ -143,7 +139,7 @@ def slack_oauth_sign_in_with_slack():
         f.write("{}\n".format(signature))
 
     logger.info("slack_oauth_sign_in_with_slack() - going to do oauth")
-    retval = _do_oauth(signature)
+    retval = _do_oauth(signature=signature, redirect_uri=APP_SIGN_IN_WITH_SLACK_REDIRECT_URI)
 
     if 'error_html' in retval.keys():
         return retval['error_html']
@@ -161,13 +157,13 @@ def slack_oauth_sign_in_with_slack():
 
 
 
-@app.route('/oauthAddToSlack')
-def slack_oauth_add_to_slack():
-    logger.info("slack_oauth_add_to_slack() - going to do oauth")
-    retval = _do_oauth()
+# @app.route('/oauthAddToSlack')
+# def slack_oauth_add_to_slack():
+#     logger.info("slack_oauth_add_to_slack() - going to do oauth")
+#     retval = _do_oauth(redirect_uri=APP_ADD_TO_SLACK_REDIRECT_URI)
 
-    if 'error_html' in retval.keys():
-        return retval['error_html']
+#     if 'error_html' in retval.keys():
+#         return retval['error_html']
 
 
 
@@ -175,7 +171,7 @@ def slack_oauth_add_to_slack():
 @app.route('/oauthEnd')
 def slack_oauth_end():
     logger.info("slack_oauth_end() - going to do oauth")
-    retval = _do_oauth()
+    retval = _do_oauth(redirect_uri=APP_OAUTH_END_URI)
 
     if 'error_html' in retval.keys():
         return retval['error_html']
