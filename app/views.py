@@ -179,6 +179,8 @@ def slack_oauth_end():
 
     # TODO: add "team=xyz" to the template... get the team_id from DynamoDB
     # can do auth.test to get user_name, look at http://stackoverflow.com/a/32323973/376240
+    user_name = "TEST USER (TODO: Replace with actual user name)"
+    team_name = "TEST TEAM (TODO: Replace with actual team name)"
     return render_template("success.html", description="Thank you, {}, for adding OpsBot to your Slack team ({})!".format(user_name, team_name))
 
 
