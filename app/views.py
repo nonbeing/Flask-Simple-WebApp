@@ -111,6 +111,8 @@ def _do_oauth(signature=None, team=None, redirect_uri=None):
     try:
         if code: #'code' implies 'happy path scenario': the user approved the slack scopes asked of him
             logger.info("Got 'code' from Slack, doing slack.oauth.access() with client_id:{}, client_secret:{}, code:{}, redirect_uri:{}".format(SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, code, redirect_uri))
+
+            # exchange 'code' for an access token as per Slack Oauth API
             slack_response = slack.oauth.access(client_id=SLACK_CLIENT_ID, client_secret=SLACK_CLIENT_SECRET, code=code, redirect_uri=redirect_uri)
 
             logger.info("Slack Oauth response for code='{}': body: {}, error: {}, successful: {}".format(code, slack_response.body, slack_response.error, slack_response.successful))
@@ -118,9 +120,13 @@ def _do_oauth(signature=None, team=None, redirect_uri=None):
 
             if oauth_json['ok']:
                 if 'oauthSignInWithSlack' in flask_url.rule:
-                    dynamo_item = { 'team_id': oauth_json['team']['id'], 'installing_user_id': oauth_json['user']['id'], 'user_name': oauth_json['user']['name'], 'scope': oauth_json['scope'], 'access_token': oauth_json['access_token'], 'ok': oauth_json['ok'] }
+                    dynamo_item = { 'team_id': oauth_json['team']['id'], 'installing_user_id': oauth_json['user']['id'], 'scope': oauth_json['scope'], 'access_token': oauth_json['access_token'], 'user_name': oauth_json['user']['name'], 'ok': oauth_json['ok'] }
 
+                    # return the user_name to be able to customize the next page in the oauth flow
                     retval['user_name'] = oauth_json['user']['name']
+
+                    logger.info("_do_oauth(): dynamo_item: '{}'".format(dynamo_item))
+                    _put_dynamodb_item(APP_DYNAMODB_TABLE, dynamo_item)
 
                 elif 'oauthAddToSlack' in flask_url.rule or 'oauthEnd' in flask_url.rule:
                     # user_id isn't in the slack_response for "Add To Slack" flow; have to do auth.test() to get it:
@@ -129,22 +135,30 @@ def _do_oauth(signature=None, team=None, redirect_uri=None):
 
                     if test_response['successful']:
                         installing_user_id = test_response['user_id']
+
+                        # sanity: confirm user_id from db matches user_id corresponding to access_token
+                        item = _get_dynamodb_item(APP_DYNAMODB_TABLE, key={ 'installing_user_id': oauth_json['user']['id'], 'team_id': oauth_json['team']['id'] })
+                        assert item['installing_user_id'] == installing_user_id, "[SNAFU] installing_user_id values from DDB and from access_token differ!?!"
+                        assert item['team_id'] == test_response['team_id'], "[SNAFU] team_id values from DDB and from access_token differ!?!"
+
+                        # update already-existing item in ddb
+                        ddb_lookup_key = {'installing_user_id': installing_user_id, 'team_id':oauth_json['team_id']}
+                        update_expression = "set scope=:scope, access_token=:access_token, ok=:ok, team_name=:team_name, bot_access_token=:bot_access_token, bot_user_id=:bot_user_id, signature=:signature"
+
+                        expression_attribute_values = { ':scope':oauth_json['scope'], ':access_token': oauth_json['access_token'], ':ok': oauth_json['ok'], ':team_name': oauth_json['team_name'], ':bot_access_token': oauth_json['bot']['bot_access_token'], ':bot_user_id': oauth_json['bot']['bot_user_id'], ':signature': signature }
+
+                        _update_dynamodb_item(APP_DYNAMODB_TABLE, ddb_lookup_key, update_expression, expression_attribute_values)
                     else:
-                        retval['error_html' ] = =  render_template("error.html", error_type="Slack Auth Test", description="We're sorry, but your Slack Authorization Token is invalid", details="{}".format(test_response.body))
+                        retval['error_html' ] = render_template("error.html", error_type="Slack Auth Test", description="We're sorry, but your Slack Authorization Token is invalid", details="auth.test() failed... {}".format(test_response.body))
 
-                    # TODO: get_item() first, then simply add new attributes to existing item - instead of overwriting the entire item:
-                    dynamo_item = { 'team_id': oauth_json['team_id'], 'installing_user_id': installing_user_id, 'team_name': oauth_json['team_name'], 'access_token': oauth_json['access_token'], 'scope': oauth_json['scope'],  'bot_user_id': oauth_json['bot']['bot_user_id'], 'bot_access_token': oauth_json['bot']['bot_access_token'], 'ok': oauth_json['ok'], 'signature': signature }
-
-                logger.info("_do_oauth(): dynamo_item: '{}'".format(dynamo_item))
-                _put_dynamodb_item(dynamo_item, APP_DYNAMODB_TABLE)
             else:
-                retval['error_html'] =  render_template("error.html", error_type="Oauth", description="We're sorry, but your Slack Authorization Flow somehow failed", details="{}".format(slack_response.body))
+                retval['error_html'] = render_template("error.html", error_type="Oauth", description="We're sorry, but your Slack Authorization Flow somehow failed", details="{}".format(slack_response.body))
         else:
             logger.error("Incoming request to /oauth was missing the expected 'code' param, error-from-slack:'{}'".format(error))
             retval['error_html'] = render_template("error.html", error_type="Oauth", description="We're sorry, but your Slack Authorization Flow failed", details="missing 'code' param from Slack, error-from-slack:{}".format(error))
     except Exception as e:
         logger.error("General Exception: '{}'".format(str(e)))
-        retval['error_html']= render_template("error.html", error_type="Bad Code", description="Sorry, something went wrong. Please report bug to `admin AT nonbeing.tech`", details="General Exception: '{}'".format(str(e)))
+        retval['error_html'] = render_template("error.html", error_type="Bad Code", description="Sorry, something went wrong. Please report bug to `admin AT nonbeing.tech`", details="General Exception: '{}'".format(str(e)))
 
     return retval
 
