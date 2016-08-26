@@ -125,7 +125,7 @@ def _do_oauth(signature=None, team=None, redirect_uri=None):
                     # return the user_name to be able to customize the next page in the oauth flow
                     retval['user_name'] = oauth_json['user']['name']
 
-                    logger.info("_do_oauth(): dynamo_item: '{}'".format(dynamo_item))
+                    logger.info("_do_oauth(): dynamo_item for put(): '{}'".format(dynamo_item))
                     _put_dynamodb_item(APP_DYNAMODB_TABLE, dynamo_item)
 
                 elif 'oauthAddToSlack' in flask_url.rule or 'oauthEnd' in flask_url.rule:
@@ -147,7 +147,7 @@ def _do_oauth(signature=None, team=None, redirect_uri=None):
                         assert item['installing_user_id'] == installing_user_id, "[SNAFU] installing_user_id values from DDB and from access_token differ!?!"
                         assert item['team_id'] == test_response.body['team_id'], "[SNAFU] team_id values from DDB and from access_token differ!?!"
 
-                        # update already-existing item in ddb
+                        # update ddb item obtained previously from "sign-in-with-slack"
                         logger.info("pre-ddb-update: ddb_lookup_key:{}".format(ddb_lookup_key))
 
                         update_expression = "set slack_scope=:slack_scope, access_token=:access_token, ok=:ok, team_name=:team_name, bot_access_token=:bot_access_token, bot_user_id=:bot_user_id, signature=:signature"
@@ -155,6 +155,9 @@ def _do_oauth(signature=None, team=None, redirect_uri=None):
                         expression_attribute_values = { ':slack_scope':oauth_json['scope'], ':access_token': oauth_json['access_token'], ':ok': oauth_json['ok'], ':team_name': oauth_json['team_name'], ':bot_access_token': oauth_json['bot']['bot_access_token'], ':bot_user_id': oauth_json['bot']['bot_user_id'], ':signature': signature }
 
                         _update_dynamodb_item(APP_DYNAMODB_TABLE, ddb_lookup_key, update_expression, expression_attribute_values)
+
+                        retval['user_name'] = item['user_name']
+                        retval['team_name'] = item['team_name']
                     else:
                         retval['error_html' ] = render_template("error.html", error_type="Slack Auth Test", description="We're sorry, but your Slack Authorization Token is invalid", details="auth.test() failed... {}".format(test_response.body))
 
@@ -170,6 +173,7 @@ def _do_oauth(signature=None, team=None, redirect_uri=None):
     return retval
 
 
+
 @app.route('/')
 @app.route('/index')
 def index():
@@ -178,8 +182,6 @@ def index():
     # arbitrary, useless hash
 
     return render_template("index.html", title="Welcome to OpsBot", client_id=SLACK_CLIENT_ID, redirect_uri=APP_SIGN_IN_WITH_SLACK_REDIRECT_URI)
-
-
 
 
 
@@ -214,6 +216,9 @@ def slack_oauth_sign_in_with_slack():
 
 
 
+# This is never invoked!
+# REMOVE!
+#
 # @app.route('/oauthAddToSlack')
 # def slack_oauth_add_to_slack():
 #     logger.info("slack_oauth_add_to_slack() - going to do oauth")
@@ -236,9 +241,9 @@ def slack_oauth_end():
 
     # TODO: add "team=xyz" to the template... get the team_id from DynamoDB
     # can do auth.test to get user_name, look at http://stackoverflow.com/a/32323973/376240
-    user_name = "TEST USER (TODO: Replace with actual user name)"
-    team_name = "TEST TEAM (TODO: Replace with actual team name)"
-    return render_template("success.html", description="Thank you, {}, for adding OpsBot to your Slack team ({})!".format(user_name, team_name))
+    user_name = retval['user_name']
+    team_name = retval['team_name']
+    return render_template("success.html", description="Thank you, <i>{}</i>, for adding OpsBot to your Slack team: <i>{}</i>!".format(user_name, team_name))
 
 
 
