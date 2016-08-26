@@ -120,7 +120,7 @@ def _do_oauth(signature=None, team=None, redirect_uri=None):
 
             if oauth_json['ok']:
                 if 'oauthSignInWithSlack' in flask_url.rule:
-                    dynamo_item = { 'team_id': oauth_json['team']['id'], 'installing_user_id': oauth_json['user']['id'], 'scope': oauth_json['scope'], 'access_token': oauth_json['access_token'], 'user_name': oauth_json['user']['name'], 'ok': oauth_json['ok'] }
+                    dynamo_item = { 'team_id': oauth_json['team']['id'], 'installing_user_id': oauth_json['user']['id'], 'slack_scope': oauth_json['scope'], 'access_token': oauth_json['access_token'], 'user_name': oauth_json['user']['name'], 'ok': oauth_json['ok'] }
 
                     # return the user_name to be able to customize the next page in the oauth flow
                     retval['user_name'] = oauth_json['user']['name']
@@ -150,9 +150,9 @@ def _do_oauth(signature=None, team=None, redirect_uri=None):
                         # update already-existing item in ddb
                         logger.info("pre-ddb-update: ddb_lookup_key:{}".format(ddb_lookup_key))
 
-                        update_expression = "set scope=:scope, access_token=:access_token, ok=:ok, team_name=:team_name, bot_access_token=:bot_access_token, bot_user_id=:bot_user_id, signature=:signature"
+                        update_expression = "set slack_scope=:slack_scope, access_token=:access_token, ok=:ok, team_name=:team_name, bot_access_token=:bot_access_token, bot_user_id=:bot_user_id, signature=:signature"
 
-                        expression_attribute_values = { ':scope':oauth_json['scope'], ':access_token': oauth_json['access_token'], ':ok': oauth_json['ok'], ':team_name': oauth_json['team_name'], ':bot_access_token': oauth_json['bot']['bot_access_token'], ':bot_user_id': oauth_json['bot']['bot_user_id'], ':signature': signature }
+                        expression_attribute_values = { ':slack_scope':oauth_json['scope'], ':access_token': oauth_json['access_token'], ':ok': oauth_json['ok'], ':team_name': oauth_json['team_name'], ':bot_access_token': oauth_json['bot']['bot_access_token'], ':bot_user_id': oauth_json['bot']['bot_user_id'], ':signature': signature }
 
                         _update_dynamodb_item(APP_DYNAMODB_TABLE, ddb_lookup_key, update_expression, expression_attribute_values)
                     else:
