@@ -136,15 +136,18 @@ def _do_oauth(signature=None, team=None, redirect_uri=None):
 
                     if test_response.successful:
                         installing_user_id = test_response.body['user_id']
-                        logger.info("got 'installing_user_id' from auth.test(): '{}'".format(installing_user_id))
+                        logger.info("auth.test(): got 'installing_user_id' = '{}'".format(installing_user_id))
+
+                        ddb_lookup_key = { 'installing_user_id': installing_user_id, 'team_id': oauth_json['team_id'] }
+                        logger.info("ddb_lookup_key: '{}'".format(ddb_lookup_key))
 
                         # sanity: confirm user_id from db matches user_id corresponding to access_token
-                        item = _get_dynamodb_item(APP_DYNAMODB_TABLE, key={ 'installing_user_id': oauth_json['user']['id'], 'team_id': oauth_json['team']['id'] })
+                        item = _get_dynamodb_item(APP_DYNAMODB_TABLE, ddb_lookup_key)
+                        logger.info("got item from ddb lookup: '{}'".format(item))
                         assert item['installing_user_id'] == installing_user_id, "[SNAFU] installing_user_id values from DDB and from access_token differ!?!"
                         assert item['team_id'] == test_response.body['team_id'], "[SNAFU] team_id values from DDB and from access_token differ!?!"
 
                         # update already-existing item in ddb
-                        ddb_lookup_key = {'installing_user_id': installing_user_id, 'team_id':oauth_json['team_id']}
                         logger.info("pre-ddb-update: ddb_lookup_key:{}".format(ddb_lookup_key))
 
                         update_expression = "set scope=:scope, access_token=:access_token, ok=:ok, team_name=:team_name, bot_access_token=:bot_access_token, bot_user_id=:bot_user_id, signature=:signature"
