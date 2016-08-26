@@ -157,7 +157,7 @@ def _do_oauth(signature=None, team=None, redirect_uri=None):
                         _update_dynamodb_item(APP_DYNAMODB_TABLE, ddb_lookup_key, update_expression, expression_attribute_values)
 
                         retval['user_name'] = item['user_name']
-                        retval['team_name'] = item['team_name']
+                        retval['team_name'] = oauth_json['team_name']
                     else:
                         retval['error_html' ] = render_template("error.html", error_type="Slack Auth Test", description="We're sorry, but your Slack Authorization Token is invalid", details="auth.test() failed... {}".format(test_response.body))
 
@@ -237,13 +237,9 @@ def slack_oauth_end():
 
     if 'error_html' in retval.keys():
         return retval['error_html']
-    # all went well, take user to success endpoint
 
-    # TODO: add "team=xyz" to the template... get the team_id from DynamoDB
-    # can do auth.test to get user_name, look at http://stackoverflow.com/a/32323973/376240
-    user_name = retval['user_name']
-    team_name = retval['team_name']
-    return render_template("success.html", description="Thank you, <i>{}</i>, for adding OpsBot to your Slack team: <i>{}</i>!".format(user_name, team_name))
+    # all went well, take user to end-of-flow success page
+    return render_template("success.html", user_name=retval['user_name'], team_name=retval['team_name'])
 
 
 
