@@ -7,17 +7,23 @@ import os
 from slacker import Slacker
 import json
 import logging
+from logging.handlers import RotatingFileHandler
 import boto3
+from botocore.exceptions import ParamValidationError, ClientError
 import ConfigParser
+
 
 # create file logger
 logger = logging.getLogger('flask_webapp')
 logger.setLevel(logging.DEBUG)
-fh = logging.FileHandler("/tmp/flaskwebapp.log")
-fh.setLevel(logging.DEBUG)
+fileHandler = RotatingFileHandler("/tmp/flaskwebapp.log", maxBytes=(1048576*5), backupCount=3)
+fileHandler.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
-fh.setFormatter(formatter)
-logger.addHandler(fh)
+fileHandler.setFormatter(formatter)
+consoleHandler = logging.StreamHandler()
+consoleHandler.setFormatter(formatter)
+logger.addHandler(fileHandler)
+logger.addHandler(consoleHandler)
 
 # Parse config/SECRETS.ini file - which must be created by hand
 config = ConfigParser.ConfigParser()
@@ -40,6 +46,9 @@ AWS_REGION = config.get('aws', 'AWS_REGION')
 
 slack = Slacker(SLACK_BOT_API_TOKEN)
 
+# get global DynamoDB client
+session = boto3.Session(region_name=AWS_REGION)
+dynamodb = session.resource('dynamodb')
 
 
 def _hmac_sha256(message, key=APP_HMAC_KEY):
@@ -55,17 +64,35 @@ def _hmac_sha256(message, key=APP_HMAC_KEY):
 
 
 
-def _add_dynamodb_item(item, dynamodb_table_name):
-    session = boto3.Session(region_name=AWS_REGION)
-    dynamodb = session.resource('dynamodb')
-
+def _put_dynamodb_item(dynamodb_table_name, item):
     table = dynamodb.Table(dynamodb_table_name)
-
-    dynamodb_response = table.put_item(
-       Item=item
-    )
+    dynamodb_response = table.put_item( Item=item )
 
     logger.info("DynamoDB PutItem Response:\n{}".format(json.dumps(dynamodb_response, indent=4)))
+
+
+def _get_dynamodb_item(dynamodb_table_name, key):
+    table = dynamodb.Table(dynamodb_table_name)
+
+    try:
+        dynamodb_response = table.get_item( Key=key )
+    except ParamValidationError as e:
+        logger.info("DynamoDB returned a ParamValidationError error: '{}'".format(e))
+        return None
+    except ClientError as e:
+        logger.info("DynamoDB returned a ClientError error: '{}'".format(e))
+        return None
+
+    logger.info("DynamoDB GetItem Response:\n{}".format(json.dumps(dynamodb_response, indent=4)))
+
+    return dynamodb_response['Item']
+
+
+def _update_dynamodb_item(dynamodb_table_name, key, update_expression, exp_values, return_values="UPDATED_NEW"):
+    table = dynamodb.Table(dynamodb_table_name)
+    dynamodb_response = table.update_item( Key=key, UpdateExpression=update_expression, ExpressionAttributeValues=exp_values, ReturnValues=return_values )
+
+    logger.info("DynamoDB UpdateItem Response:\n{}".format(json.dumps(dynamodb_response, indent=4)))
 
 
 
@@ -96,11 +123,20 @@ def _do_oauth(signature=None, team=None, redirect_uri=None):
                     retval['user_name'] = oauth_json['user']['name']
 
                 elif 'oauthAddToSlack' in flask_url.rule or 'oauthEnd' in flask_url.rule:
-                    # TODO: get_item() first, then simply add new attributes to existing item
-                    dynamo_item = { 'team_id': oauth_json['team_id'], 'team_name': oauth_json['team_name'], 'access_token': oauth_json['access_token'], 'scope': oauth_json['scope'], 'user_id': oauth_json['user_id'], 'bot_user_id': oauth_json['bot']['bot_user_id'], 'bot_access_token': oauth_json['bot']['bot_access_token'], 'ok': oauth_json['ok'], 'signature': signature }
+                    # user_id isn't in the slack_response for "Add To Slack" flow; have to do auth.test() to get it:
+                    slack_client = Slacker(oauth_json['access_token'])
+                    test_response = slack_client.auth.test()
+
+                    if test_response['successful']:
+                        installing_user_id = test_response['user_id']
+                    else:
+                        retval['error_html' ] = =  render_template("error.html", error_type="Slack Auth Test", description="We're sorry, but your Slack Authorization Token is invalid", details="{}".format(test_response.body))
+
+                    # TODO: get_item() first, then simply add new attributes to existing item - instead of overwriting the entire item:
+                    dynamo_item = { 'team_id': oauth_json['team_id'], 'installing_user_id': installing_user_id, 'team_name': oauth_json['team_name'], 'access_token': oauth_json['access_token'], 'scope': oauth_json['scope'],  'bot_user_id': oauth_json['bot']['bot_user_id'], 'bot_access_token': oauth_json['bot']['bot_access_token'], 'ok': oauth_json['ok'], 'signature': signature }
 
                 logger.info("_do_oauth(): dynamo_item: '{}'".format(dynamo_item))
-                _add_dynamodb_item(dynamo_item, APP_DYNAMODB_TABLE)
+                _put_dynamodb_item(dynamo_item, APP_DYNAMODB_TABLE)
             else:
                 retval['error_html'] =  render_template("error.html", error_type="Oauth", description="We're sorry, but your Slack Authorization Flow somehow failed", details="{}".format(slack_response.body))
         else:
