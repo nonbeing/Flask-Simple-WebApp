@@ -130,19 +130,23 @@ def _do_oauth(signature=None, team=None, redirect_uri=None):
 
                 elif 'oauthAddToSlack' in flask_url.rule or 'oauthEnd' in flask_url.rule:
                     # user_id isn't in the slack_response for "Add To Slack" flow; have to do auth.test() to get it:
+                    logger.info("Calling slack auth.test() to get user_id and for sanity checks".format())
                     slack_client = Slacker(oauth_json['access_token'])
                     test_response = slack_client.auth.test()
 
-                    if test_response['successful']:
-                        installing_user_id = test_response['user_id']
+                    if test_response.successful:
+                        installing_user_id = test_response.body['user_id']
+                        logger.info("got 'installing_user_id' from auth.test(): '{}'".format(installing_user_id))
 
                         # sanity: confirm user_id from db matches user_id corresponding to access_token
                         item = _get_dynamodb_item(APP_DYNAMODB_TABLE, key={ 'installing_user_id': oauth_json['user']['id'], 'team_id': oauth_json['team']['id'] })
                         assert item['installing_user_id'] == installing_user_id, "[SNAFU] installing_user_id values from DDB and from access_token differ!?!"
-                        assert item['team_id'] == test_response['team_id'], "[SNAFU] team_id values from DDB and from access_token differ!?!"
+                        assert item['team_id'] == test_response.body['team_id'], "[SNAFU] team_id values from DDB and from access_token differ!?!"
 
                         # update already-existing item in ddb
                         ddb_lookup_key = {'installing_user_id': installing_user_id, 'team_id':oauth_json['team_id']}
+                        logger.info("pre-ddb-update: ddb_lookup_key:{}".format(ddb_lookup_key))
+
                         update_expression = "set scope=:scope, access_token=:access_token, ok=:ok, team_name=:team_name, bot_access_token=:bot_access_token, bot_user_id=:bot_user_id, signature=:signature"
 
                         expression_attribute_values = { ':scope':oauth_json['scope'], ':access_token': oauth_json['access_token'], ':ok': oauth_json['ok'], ':team_name': oauth_json['team_name'], ':bot_access_token': oauth_json['bot']['bot_access_token'], ':bot_user_id': oauth_json['bot']['bot_user_id'], ':signature': signature }
