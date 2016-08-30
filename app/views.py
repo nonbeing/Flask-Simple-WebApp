@@ -125,7 +125,7 @@ def _do_oauth(signature=None, team=None, redirect_uri=None):
             oauth_json = slack_response.body
 
             if oauth_json['ok']:
-                if 'oauthSignInWithSlack' in flask_url.rule:
+                if 'oauthSignInWithSlack' in flask_url.rule: #REMOVED from flow - no more "Sign in with slack", only "Add To Slack" now
                     dynamo_item = { 'team_id': oauth_json['team']['id'], 'installing_user_id': oauth_json['user']['id'], 'slack_scope': oauth_json['scope'], 'access_token': oauth_json['access_token'], 'user_name': oauth_json['user']['name'], 'ok': oauth_json['ok'] }
 
                     # return the user_name to be able to customize the next page in the oauth flow
@@ -135,34 +135,39 @@ def _do_oauth(signature=None, team=None, redirect_uri=None):
                     _put_dynamodb_item(APP_DYNAMODB_TABLE, dynamo_item)
 
                 elif 'oauthAddToSlack' in flask_url.rule or 'oauthEnd' in flask_url.rule:
-                    # user_id isn't in the slack_response for "Add To Slack" flow; have to do auth.test() to get it:
+                    # user_name isn't in the slack_response for "Add To Slack" flow; have to do auth.test() to get it:
                     logger.info("Calling slack auth.test() to get user_id and for sanity checks".format())
                     slack_client = Slacker(oauth_json['access_token'])
                     test_response = slack_client.auth.test()
 
                     if test_response.successful:
-                        installing_user_id = test_response.body['user_id']
-                        logger.info("auth.test(): got 'installing_user_id' = '{}'".format(installing_user_id))
+                        user_name = test_response.body['user']
+                        logger.info("auth.test(): got 'user_name' = '{}'".format(user_name))
 
-                        ddb_lookup_key = { 'team_id': oauth_json['team_id'] }
-                        logger.info("ddb_lookup_key: '{}'".format(ddb_lookup_key))
+                        # ddb_lookup_key = { 'team_id': oauth_json['team_id'] }
+                        # logger.info("ddb_lookup_key: '{}'".format(ddb_lookup_key))
 
-                        # sanity: confirm user_id from db matches user_id corresponding to access_token
-                        item = _get_dynamodb_item(APP_DYNAMODB_TABLE, ddb_lookup_key)
-                        logger.info("got item from ddb lookup: '{}'".format(item))
-                        assert item['installing_user_id'] == installing_user_id, "[SNAFU] installing_user_id values from DDB and from access_token differ!?!"
-                        assert item['team_id'] == test_response.body['team_id'], "[SNAFU] team_id values from DDB and from access_token differ!?!"
+                        # # sanity: confirm user_id from db matches user_id corresponding to access_token
+                        # item = _get_dynamodb_item(APP_DYNAMODB_TABLE, ddb_lookup_key)
+                        # logger.info("got item from ddb lookup: '{}'".format(item))
+                        # assert item['installing_user_id'] == installing_user_id, "[SNAFU] installing_user_id values from DDB and from access_token differ!?!"
+                        # assert item['team_id'] == test_response.body['team_id'], "[SNAFU] team_id values from DDB and from access_token differ!?!"
+
+                        dynamo_item = { 'team_id': oauth_json['team_id'], 'team_name': oauth_json['team_name'], 'installing_user_id': oauth_json['user_id'], 'user_name': user_name, 'slack_scope': oauth_json['scope'], 'access_token': oauth_json['access_token'], 'bot_access_token': oauth_json['bot']['bot_access_token'], 'bot_user_id': oauth_json['bot']['bot_user_id'], 'ok': oauth_json['ok'] }
+
+                        logger.info("_do_oauth(): dynamo_item being put: '{}'".format(dynamo_item))
+                        _put_dynamodb_item(APP_DYNAMODB_TABLE, dynamo_item)
 
                         # update ddb item obtained previously from "sign-in-with-slack"
-                        logger.info("pre-ddb-update: ddb_lookup_key:{}".format(ddb_lookup_key))
+                        # logger.info("pre-ddb-update: ddb_lookup_key:{}".format(ddb_lookup_key))
 
-                        update_expression = "set slack_scope=:slack_scope, access_token=:access_token, ok=:ok, team_name=:team_name, bot_access_token=:bot_access_token, bot_user_id=:bot_user_id, signature=:signature"
+                        # update_expression = "set slack_scope=:slack_scope, access_token=:access_token, ok=:ok, team_name=:team_name, bot_access_token=:bot_access_token, bot_user_id=:bot_user_id, signature=:signature"
 
-                        expression_attribute_values = { ':slack_scope':oauth_json['scope'], ':access_token': oauth_json['access_token'], ':ok': oauth_json['ok'], ':team_name': oauth_json['team_name'], ':bot_access_token': oauth_json['bot']['bot_access_token'], ':bot_user_id': oauth_json['bot']['bot_user_id'], ':signature': signature }
+                        # expression_attribute_values = { ':slack_scope':oauth_json['scope'], ':access_token': oauth_json['access_token'], ':ok': oauth_json['ok'], ':team_name': oauth_json['team_name'], ':bot_access_token': oauth_json['bot']['bot_access_token'], ':bot_user_id': oauth_json['bot']['bot_user_id'], ':signature': signature }
 
-                        _update_dynamodb_item(APP_DYNAMODB_TABLE, ddb_lookup_key, update_expression, expression_attribute_values)
+                        # _update_dynamodb_item(APP_DYNAMODB_TABLE, ddb_lookup_key, update_expression, expression_attribute_values)
 
-                        retval['user_name'] = item['user_name']
+                        retval['user_name'] = user_name
                         retval['team_name'] = oauth_json['team_name']
                     else:
                         retval['error_html' ] = render_template("error.html", error_type="Slack Auth Test", description="We're sorry, but your Slack Authorization Token is invalid", details="auth.test() failed... {}".format(test_response.body))
