@@ -79,10 +79,10 @@ def _get_dynamodb_item(dynamodb_table_name, key):
     try:
         dynamodb_response = table.get_item( Key=key )
     except ParamValidationError as e:
-        logger.info("DynamoDB returned a ParamValidationError error: '{}'".format(e))
+        logger.error("DynamoDB returned a ParamValidationError error: '{}'".format(e))
         return None
     except ClientError as e:
-        logger.info("DynamoDB returned a ClientError error: '{}'".format(e))
+        logger.error("DynamoDB returned a ClientError error: '{}'".format(e))
         return None
 
     logger.info("DynamoDB GetItem Response:\n{}".format(json.dumps(dynamodb_response, indent=4)))
@@ -187,7 +187,7 @@ def index():
     # When the user has signed into his team, we can take a hash of the team name instead of an
     # arbitrary, useless hash
 
-    return render_template("index.html", title="Welcome to OpsBot", client_id=SLACK_CLIENT_ID, redirect_uri=APP_SIGN_IN_WITH_SLACK_REDIRECT_URI)
+    return render_template("index.html", title="Welcome to OpsBot", client_id=SLACK_CLIENT_ID, redirect_uri=APP_OAUTH_END_URI)
 
 
 
