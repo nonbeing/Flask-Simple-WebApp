@@ -47,6 +47,8 @@ AWS_REGION = config.get('aws', 'AWS_REGION')
 slack = Slacker(SLACK_BOT_API_TOKEN)
 
 # get global DynamoDB client
+# it's assumed that the EC2 instance running this code has an associated Instance Profile (IAM Role)
+# that has suitable DynamoDB permissions --> hence no API keys need to specified here
 session = boto3.Session(region_name=AWS_REGION)
 dynamodb = session.resource('dynamodb')
 
@@ -85,7 +87,11 @@ def _get_dynamodb_item(dynamodb_table_name, key):
 
     logger.info("DynamoDB GetItem Response:\n{}".format(json.dumps(dynamodb_response, indent=4)))
 
-    return dynamodb_response['Item']
+    if "Item" in dynamodb_response.keys():
+        return dynamodb_response['Item']
+    else:
+        logger.error("DynamoDB did not retrieve an item corresponding to key: '{}'".format(key))
+        return None
 
 
 def _update_dynamodb_item(dynamodb_table_name, key, update_expression, exp_values, return_values="UPDATED_NEW"):
@@ -138,7 +144,7 @@ def _do_oauth(signature=None, team=None, redirect_uri=None):
                         installing_user_id = test_response.body['user_id']
                         logger.info("auth.test(): got 'installing_user_id' = '{}'".format(installing_user_id))
 
-                        ddb_lookup_key = { 'installing_user_id': installing_user_id, 'team_id': oauth_json['team_id'] }
+                        ddb_lookup_key = { 'team_id': oauth_json['team_id'] }
                         logger.info("ddb_lookup_key: '{}'".format(ddb_lookup_key))
 
                         # sanity: confirm user_id from db matches user_id corresponding to access_token
