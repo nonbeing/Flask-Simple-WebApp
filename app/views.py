@@ -65,7 +65,6 @@ def _hmac_sha256(message, key=APP_HMAC_KEY):
     return signature
 
 
-
 def _put_dynamodb_item(dynamodb_table_name, item):
     table = dynamodb.Table(dynamodb_table_name)
     dynamodb_response = table.put_item( Item=item )
@@ -101,8 +100,7 @@ def _update_dynamodb_item(dynamodb_table_name, key, update_expression, exp_value
     logger.info("DynamoDB UpdateItem Response:\n{}".format(json.dumps(dynamodb_response, indent=4)))
 
 
-
-def _do_oauth(signature=None, team=None, redirect_uri=None):
+def _do_oauth(redirect_uri=None):
     flask_url = request.url_rule
 
     # grab the 'code' and 'state' from the incoming Slack request
@@ -125,120 +123,39 @@ def _do_oauth(signature=None, team=None, redirect_uri=None):
             oauth_json = slack_response.body
 
             if oauth_json['ok']:
-                if 'oauthSignInWithSlack' in flask_url.rule: #REMOVED from flow - no more "Sign in with slack", only "Add To Slack" now
-                    dynamo_item = { 'team_id': oauth_json['team']['id'], 'installing_user_id': oauth_json['user']['id'], 'slack_scope': oauth_json['scope'], 'access_token': oauth_json['access_token'], 'user_name': oauth_json['user']['name'], 'ok': oauth_json['ok'] }
+                # user_name isn't in the slack_response for "Add To Slack" flow; have to do auth.test() to get it:
+                logger.info("Calling slack auth.test() to get user_id and for sanity checks".format())
+                slack_client = Slacker(oauth_json['access_token'])
+                test_response = slack_client.auth.test()
 
-                    # return the user_name to be able to customize the next page in the oauth flow
-                    retval['user_name'] = oauth_json['user']['name']
+                if test_response.successful:
+                    user_name = test_response.body['user']
+                    logger.info("auth.test(): got 'user_name' = '{}'".format(user_name))
 
-                    logger.info("_do_oauth(): dynamo_item for put(): '{}'".format(dynamo_item))
+                    dynamo_item = { 'team_id': oauth_json['team_id'], 'team_name': oauth_json['team_name'], 'installing_user_id': oauth_json['user_id'], 'user_name': user_name, 'slack_scope': oauth_json['scope'], 'access_token': oauth_json['access_token'], 'bot_access_token': oauth_json['bot']['bot_access_token'], 'bot_user_id': oauth_json['bot']['bot_user_id'], 'ok': oauth_json['ok'] }
+
+                    logger.info("_do_oauth(): dynamo_item being put: '{}'".format(dynamo_item))
                     _put_dynamodb_item(APP_DYNAMODB_TABLE, dynamo_item)
 
-                elif 'oauthAddToSlack' in flask_url.rule or 'oauthEnd' in flask_url.rule:
-                    # user_name isn't in the slack_response for "Add To Slack" flow; have to do auth.test() to get it:
-                    logger.info("Calling slack auth.test() to get user_id and for sanity checks".format())
-                    slack_client = Slacker(oauth_json['access_token'])
-                    test_response = slack_client.auth.test()
-
-                    if test_response.successful:
-                        user_name = test_response.body['user']
-                        logger.info("auth.test(): got 'user_name' = '{}'".format(user_name))
-
-                        # ddb_lookup_key = { 'team_id': oauth_json['team_id'] }
-                        # logger.info("ddb_lookup_key: '{}'".format(ddb_lookup_key))
-
-                        # # sanity: confirm user_id from db matches user_id corresponding to access_token
-                        # item = _get_dynamodb_item(APP_DYNAMODB_TABLE, ddb_lookup_key)
-                        # logger.info("got item from ddb lookup: '{}'".format(item))
-                        # assert item['installing_user_id'] == installing_user_id, "[SNAFU] installing_user_id values from DDB and from access_token differ!?!"
-                        # assert item['team_id'] == test_response.body['team_id'], "[SNAFU] team_id values from DDB and from access_token differ!?!"
-
-                        dynamo_item = { 'team_id': oauth_json['team_id'], 'team_name': oauth_json['team_name'], 'installing_user_id': oauth_json['user_id'], 'user_name': user_name, 'slack_scope': oauth_json['scope'], 'access_token': oauth_json['access_token'], 'bot_access_token': oauth_json['bot']['bot_access_token'], 'bot_user_id': oauth_json['bot']['bot_user_id'], 'ok': oauth_json['ok'] }
-
-                        logger.info("_do_oauth(): dynamo_item being put: '{}'".format(dynamo_item))
-                        _put_dynamodb_item(APP_DYNAMODB_TABLE, dynamo_item)
-
-                        # update ddb item obtained previously from "sign-in-with-slack"
-                        # logger.info("pre-ddb-update: ddb_lookup_key:{}".format(ddb_lookup_key))
-
-                        # update_expression = "set slack_scope=:slack_scope, access_token=:access_token, ok=:ok, team_name=:team_name, bot_access_token=:bot_access_token, bot_user_id=:bot_user_id, signature=:signature"
-
-                        # expression_attribute_values = { ':slack_scope':oauth_json['scope'], ':access_token': oauth_json['access_token'], ':ok': oauth_json['ok'], ':team_name': oauth_json['team_name'], ':bot_access_token': oauth_json['bot']['bot_access_token'], ':bot_user_id': oauth_json['bot']['bot_user_id'], ':signature': signature }
-
-                        # _update_dynamodb_item(APP_DYNAMODB_TABLE, ddb_lookup_key, update_expression, expression_attribute_values)
-
-                        retval['user_name'] = user_name
-                        retval['team_name'] = oauth_json['team_name']
-                    else:
-                        retval['error_html' ] = render_template("error.html", error_type="Slack Auth Test", description="We're sorry, but your Slack Authorization Token is invalid", details="auth.test() failed... {}".format(test_response.body))
-
+                    retval['user_name'] = user_name
+                    retval['team_name'] = oauth_json['team_name']
+                else:
+                    retval['error_html' ] = render_template("error.html", error_type="Slack Auth Test", description="We're sorry, but your Slack Authorization Token is invalid", details="auth.test() failed... {}".format(test_response.body))
             else:
-                retval['error_html'] = render_template("error.html", error_type="Oauth", description="We're sorry, but your Slack Authorization Flow somehow failed", details="{}".format(slack_response.body))
+                retval['error_html'] = render_template("error.html", error_type="OauthNotOk", description="We're sorry, but your Slack Authorization Flow somehow failed", details="{}".format(slack_response.body))
         else:
             logger.error("Incoming request to /oauth was missing the expected 'code' param, error-from-slack:'{}'".format(error))
             retval['error_html'] = render_template("error.html", error_type="Oauth", description="We're sorry, but your Slack Authorization Flow failed", details="missing 'code' param from Slack, error-from-slack:{}".format(error))
     except Exception as e:
         logger.error("General Exception: '{}'".format(str(e)))
         retval['error_html'] = render_template("error.html", error_type="Bad Code", description="Sorry, something went wrong. Please report bug to `admin AT nonbeing.tech`", details="General Exception: '{}'".format(str(e)))
-
     return retval
-
 
 
 @app.route('/')
 @app.route('/index')
 def index():
-    #TODO: Instead of adding the "Add to Slack" button, have a "Sign into Slack" button here
-    # When the user has signed into his team, we can take a hash of the team name instead of an
-    # arbitrary, useless hash
-
     return render_template("index.html", title="Welcome to OpsBot", client_id=SLACK_CLIENT_ID, redirect_uri=APP_OAUTH_END_URI)
-
-
-
-@app.route('/oauthSignInWithSlack')
-def slack_oauth_sign_in_with_slack():
-    now_ts = time.time()
-    signature = _hmac_sha256(now_ts)
-
-    logger.info("now_ts: '{}'\nsignature: '{}'".format(now_ts, signature))
-
-    # save the signature for later
-    # TODO: needs to go into a db, even sqlite will do
-    with open(APP_SIG_FILE_PATH, 'a') as f:
-        f.write("{}\n".format(signature))
-
-    logger.info("slack_oauth_sign_in_with_slack() - going to do oauth")
-    retval = _do_oauth(signature=signature, redirect_uri=APP_SIGN_IN_WITH_SLACK_REDIRECT_URI)
-
-    if 'error_html' in retval.keys():
-        return retval['error_html']
-    elif 'user_name' in retval.keys():
-        user_name = retval['user_name']
-        logger.info("slack_oauth_sign_in_with_slack(): got username: '{}'".format(user_name))
-
-    # all went well, take user to AddToSlack flow
-    return render_template("addToSlack.html",
-        user_name=user_name,
-        client_id=SLACK_CLIENT_ID,
-        title='Install OpsBot',
-        signature=signature,
-        redirect_uri=APP_OAUTH_END_URI)
-
-
-
-# This is never invoked!
-# REMOVE!
-#
-# @app.route('/oauthAddToSlack')
-# def slack_oauth_add_to_slack():
-#     logger.info("slack_oauth_add_to_slack() - going to do oauth")
-#     retval = _do_oauth(redirect_uri=APP_ADD_TO_SLACK_REDIRECT_URI)
-
-#     if 'error_html' in retval.keys():
-#         return retval['error_html']
-
-
 
 
 @app.route('/oauthEnd')
@@ -258,4 +175,3 @@ def slack_oauth_end():
 @app.route('/opsbot/help')
 def opsbot_help():
     return redirect("http://nonbeing.tech", code=302)
-
